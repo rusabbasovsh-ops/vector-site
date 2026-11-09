@@ -13,6 +13,8 @@ STREET = {'ru': 'ул. Арутюнова, 7', 'uz': 'Arutyunov koʻchasi, 7', '
 # офис на карте: дом найден геокодером Яндекса («Самарканд, улица Михаила Арутюнова, 7»), точка лежит на той же улице в OpenStreetMap
 MAP = 'https://yandex.uz/maps/?text=%D0%A1%D0%B0%D0%BC%D0%B0%D1%80%D0%BA%D0%B0%D0%BD%D0%B4%2C%20%D1%83%D0%BB%D0%B8%D1%86%D0%B0%20%D0%9C%D0%B8%D1%85%D0%B0%D0%B8%D0%BB%D0%B0%20%D0%90%D1%80%D1%83%D1%82%D1%8E%D0%BD%D0%BE%D0%B2%D0%B0%2C%207'
 OFFICE = {'ru': 'Офис Vector Recovery в Самарканде', 'uz': 'Vector Recovery Samarqand ofisi', 'tg': 'Дафтари Vector Recovery дар Самарқанд'}
+NAMES = ['Вектор Рекавери', 'Вектор Рикавери', 'Вектор', 'Vector', 'Vector Recovery Samarkand', 'Vector Recovery Samarqand', 'Центр восстановления Vector', 'Маркази барқарорсозии Vector', 'Vector tiklanish markazi']
+REGION = {'ru': 'Самаркандская область', 'uz': 'Samarqand viloyati', 'tg': 'вилояти Самарқанд'}
 COUNTRY = {'ru': 'Узбекистан', 'uz': 'Oʻzbekiston', 'tg': 'Ӯзбекистон'}   # как у переводчика: «Oʻzbekiston Respublikasi», «Ҷумҳурии Ӯзбекистон»
 root = sys.argv[1]
 
@@ -36,11 +38,13 @@ def block(code, path, locale, title, desc, qa):
     alt += f'<link rel="alternate" hreflang="x-default" href="{BASE}">\n'
     og_alt = ''.join(f'<meta property="og:locale:alternate" content="{l}">\n' for c, _, l in LANGS if c != code)
     ld = {
-        '@type': 'MedicalOrganization', '@id': BASE + '#organization',
-        'name': 'Vector Recovery', 'alternateName': ['Vector', 'Центр восстановления Vector'],
+        '@type': 'MedicalClinic', '@id': BASE + '#organization',
+        'name': 'Vector Recovery', 'alternateName': NAMES,
         'legalName': 'ООО «VECTOR-CLINIC»', 'url': BASE,
         'description': desc, 'image': OG_IMAGE, 'logo': BASE + 'brand/logo-dark.png',
         'telephone': '+998918110333',
+        'medicalSpecialty': 'https://schema.org/Psychiatric',   # в лицензии: психиатрия, диагностика, консультация, стационар
+        'address': {'@type': 'PostalAddress', 'streetAddress': STREET[code], 'addressLocality': CITY[code], 'addressRegion': REGION[code], 'addressCountry': 'UZ'},   # офис для консультаций — тот же, что в Place
         # Это публичный офис для консультаций, а не адрес стационара.
         'location': {'@id': BASE + '#office'},
         'identifier': {'@type': 'PropertyValue', 'name': 'Лицензия Минздрава Республики Узбекистан', 'value': '1857962'},
@@ -54,9 +58,9 @@ def block(code, path, locale, title, desc, qa):
     }
     office = {'@type': 'Place', '@id': BASE + '#office', 'name': OFFICE[code],
               'address': {'@type': 'PostalAddress', 'streetAddress': STREET[code],
-                          'addressLocality': CITY[code], 'addressCountry': 'UZ'}, 'hasMap': MAP}
+                          'addressLocality': CITY[code], 'addressRegion': REGION[code], 'addressCountry': 'UZ'}, 'hasMap': MAP}
     website = {'@type': 'WebSite', '@id': BASE + '#website', 'url': BASE,
-               'name': 'Vector Recovery', 'alternateName': 'Vector',
+               'name': 'Vector Recovery', 'alternateName': ['Вектор Рекавери', 'Vector'],
                'publisher': {'@id': BASE + '#organization'}, 'inLanguage': ['ru', 'uz', 'tg']}
     page = {'@type': 'WebPage', '@id': url + '#webpage', 'url': url,
             'name': title, 'description': desc, 'inLanguage': code,
@@ -91,9 +95,12 @@ for code, path, locale in LANGS:
     f = f'{root}/{path}index.html'
     s = open(f, encoding='utf-8').read()
     s = re.sub(r'(<title>.*?)(Vector)(?! Recovery)', r'\1Vector Recovery', s)
-    s = s.replace('центр восстановления Vector,', 'центр восстановления Vector Recovery,')
-    s = s.replace('маркази барқарорсозии Vector,', 'маркази барқарорсозии Vector Recovery,')
+    s = s.replace('центр восстановления Vector,', 'центр восстановления Vector Recovery («Вектор Рекавери»),')
+    s = s.replace('маркази барқарорсозии Vector,', 'маркази барқарорсозии Vector Recovery («Вектор Рекавери»),')
     s = s.replace('Biz — Vector tiklanish markazi', 'Biz — Vector Recovery tiklanish markazi')
+    s = s.replace('Центр восстановления Vector, Самарканд</p>', 'Центр восстановления Vector Recovery («Вектор Рекавери»), Самарканд</p>')   # подвал
+    s = s.replace('Маркази барқарорсозии Vector, Самарқанд</p>', 'Маркази барқарорсозии Vector Recovery («Вектор Рекавери»), Самарқанд</p>')
+    s = s.replace('Vector tiklanish markazi, Samarqand</p>', 'Vector Recovery tiklanish markazi, Samarqand</p>')
     # убрать прежнюю разметку (относительные hreflang и блок прошлого прогона)
     s, robots_count = re.subn(r'<meta\s+name="robots"\s+content="[^"]*"\s*/?>', '<meta name="robots" content="index, follow">', s, flags=re.I)
     if not robots_count:
