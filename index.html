@@ -806,14 +806,16 @@ html:not(.sc-on) [data-sc-in],html:not(.sc-on) [data-sc-stagger]>*{opacity:1;tra
   const still = $('#hero-still');
   const calm = matchMedia('(prefers-reduced-motion: reduce)').matches || (navigator.connection && navigator.connection.saveData);
   const port = matchMedia('(max-aspect-ratio: 1/1)').matches;
-  const base = port ? 'media/hA-p' : 'media/hA-l';
+  const media = port
+    ? {poster: 'media/hA-p.webp', webm: 'media/hA-p.webm', mp4: 'media/hA-p.mp4'}
+    : {poster: 'media/hA-l.webp', webm: 'media/hA-l.webm', mp4: 'media/hA-l.mp4'};
   if (!calm) {
     const v = document.createElement('video');
-    v.muted = true; v.playsInline = true; v.autoplay = true; v.loop = true; v.preload = 'auto'; v.poster = base + '.webp'; v.setAttribute('aria-hidden','true');
+    v.muted = true; v.playsInline = true; v.autoplay = true; v.loop = true; v.preload = 'auto'; v.poster = media.poster; v.setAttribute('aria-hidden','true');
     v.addEventListener('canplay', () => { if (!v.isConnected) { (still.closest('picture') || still).replaceWith(v); v.play().catch(()=>{}); } }, {once:true});
     // ролик (2 МБ) качается только после фото первого экрана: иначе на медленной сети он отбирает канал у фото
     // и первый экран появляется позже. Источники — тоже после: добавленный <source> сам запускает загрузку
-    const load = () => { for (const [k, type] of [['webm','video/webm'],['mp4','video/mp4']]) { const x = document.createElement('source'); x.src = base + '.' + k; x.type = type; v.append(x); } v.load(); };
+    const load = () => { for (const format of ['webm','mp4']) { const x = document.createElement('source'); x.src = media[format]; x.type = 'video/' + format; v.append(x); } v.load(); };
     if (still.complete && still.naturalWidth) load(); else { still.addEventListener('load', load, {once:true}); still.addEventListener('error', load, {once:true}); }
     /* смысл ролика: люди → дом → источник → будущее → первый шаг (дверь консультации); переходы вверх, подпись меняется посередине склейки */
     const tag = $('#scene-tag'), marks = [[0, "Люди рядом"], [1.32, "Дом"], [4.04, "Источник"], [6.76, "Будущее"], [9.0, "Первый шаг: консультация"], [13.24, "Люди рядом"]];
@@ -830,6 +832,17 @@ html:not(.sc-on) [data-sc-in],html:not(.sc-on) [data-sc-stagger]>*{opacity:1;tra
   const sync = () => dock.classList.toggle('show', !seen.hero && !seen.talk);
   new IntersectionObserver(es => { es.forEach(e => { seen.hero = e.isIntersecting; }); sync(); }, {threshold: 0.12}).observe($('.open'));
   new IntersectionObserver(es => { es.forEach(e => { seen.talk = e.isIntersecting; }); sync(); }, {threshold: 0.12}).observe($('#contact'));
+
+  /* Клики по кнопкам связи. Событие хранится на странице до подключения аналитики. */
+  document.addEventListener('click', event => {
+    if (!(event.target instanceof Element)) return;
+    const link = event.target.closest('a[href]');
+    const href = link?.getAttribute('href');
+    const name = href === 'tel:+998918110333' ? 'click_phone'
+      : href === 'https://t.me/vectorrecovery' ? 'click_telegram' : null;
+    if (!name) return;
+    (window.dataLayer ??= []).push({event: name, site_language: document.documentElement.lang.split('-')[0]});
+  });
 
   /* Документы */
   const viewer = $('#modal-doc'); let last = null;
