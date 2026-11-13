@@ -2,7 +2,11 @@
   'use strict';
 
   const counterId = 114206470;
-  const languagesByPath = { '/': 'ru', '/uz/': 'uz', '/tg/': 'tg' };
+  // Only general contact pages are tracked. Topic-specific URLs can reveal sensitive interests.
+  const languagesByPath = {
+    '/': 'ru', '/uz/': 'uz', '/tg/': 'tg',
+    '/semye/': 'ru', '/pervoe-obrashenie/': 'ru'
+  };
   const language = languagesByPath[location.pathname];
   if (location.origin !== 'https://www.vectorecovery.uz' || !language) return;
 
