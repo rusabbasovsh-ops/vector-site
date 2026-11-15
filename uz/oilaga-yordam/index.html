@@ -42,6 +42,7 @@
     summary { cursor: pointer; font-weight: 600; }
     :focus-visible { outline: 2px solid #356f64; outline-offset: 3px; }
   </style>
+  <script defer src="/vendor/vector-metrika.js"></script>
 </head>
 <body>
   <header><div class="brand">
@@ -71,5 +72,15 @@
       <ul><li><a href="/uz/birinchi-murojaat/">Birinchi murojaat</a></li></ul>
     </nav>
   </main>
+
+  <script>
+    document.addEventListener('click', event => {
+      if (!(event.target instanceof Element)) return;
+      const href = event.target.closest('a[href]')?.getAttribute('href');
+      const name = href === 'tel:+998918110333' ? 'click_phone'
+        : href === 'https://t.me/vectorecovery' ? 'click_telegram' : null;
+      if (name) window.vectorMetrikaGoal?.(name);
+    });
+  </script>
 </body>
 </html>

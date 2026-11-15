@@ -2,7 +2,11 @@
   'use strict';
 
   const counterId = 114206470;
-  const languagesByPath = { '/': 'ru', '/uz/': 'uz', '/tg/': 'tg' };
+  const languagesByPath = {
+    '/': 'ru', '/uz/': 'uz', '/tg/': 'tg',
+    '/semye/': 'ru', '/pervoe-obrashenie/': 'ru',
+    '/uz/oilaga-yordam/': 'uz', '/uz/birinchi-murojaat/': 'uz'
+  };
   const language = languagesByPath[location.pathname];
   if (location.origin !== 'https://www.vectorecovery.uz' || !language) return;
 
