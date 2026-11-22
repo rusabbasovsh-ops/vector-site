@@ -27,6 +27,7 @@
 (() => {
   const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
   const images = [...document.querySelectorAll('main > img.top, main > img.bottom')];
+  const mobileLayout = matchMedia('(max-width: 600px)');
   const vertexSource = `
     attribute vec2 uv;
     uniform float aspect;
@@ -146,6 +147,7 @@
 
   Promise.all(images.map(image => image.decode().catch(() => null))).then(() => {
     const surfaces = [];
+    const mobileRibbons = [];
     let frame = 0;
     let previous = -Infinity;
 
@@ -159,19 +161,45 @@
 
     function sync() {
       cancelAnimationFrame(frame);
-      if (!reducedMotion.matches && !surfaces.length) {
+      const mobile = mobileLayout.matches;
+      const animate = !reducedMotion.matches;
+      if (mobile && animate && !mobileRibbons.length) {
+        images.forEach((image, index) => {
+          const ribbon = document.createElement('img');
+          ribbon.className = image.className;
+          ribbon.alt = '';
+          ribbon.setAttribute('aria-hidden', 'true');
+          ribbon.hidden = true;
+          ribbon.addEventListener('load', sync, { once: true });
+          ribbon.src = './ribbon-mobile-' + index + '.webp';
+          image.after(ribbon);
+          mobileRibbons.push(ribbon);
+        });
+      }
+      if (!mobile && animate && !surfaces.length) {
         images.forEach((image, i) => {
           if (!image.naturalWidth) return;
           const surface = createSurface(image, i);
           if (surface) surfaces.push(surface);
         });
       }
-      surfaces.forEach(surface => surface.show(!reducedMotion.matches));
-      if (surfaces.length && !reducedMotion.matches && !document.hidden) {
+      surfaces.forEach(surface => surface.show(!mobile && animate));
+      if (mobile) {
+        images.forEach((image, index) => {
+          const ribbon = mobileRibbons[index];
+          const show = animate && Boolean(ribbon?.complete && ribbon.naturalWidth);
+          if (ribbon) ribbon.hidden = !show;
+          image.hidden = show;
+        });
+      } else {
+        mobileRibbons.forEach(ribbon => { ribbon.hidden = true; });
+      }
+      if (!mobile && animate && surfaces.length && !document.hidden) {
         frame = requestAnimationFrame(render);
       }
     }
     reducedMotion.addEventListener('change', sync);
+    mobileLayout.addEventListener('change', sync);
     document.addEventListener('visibilitychange', sync);
     sync();
   });
