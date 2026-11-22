@@ -1,3 +1,10 @@
 {
-  "trailingSlash": true
+  "trailingSlash": true,
+  "redirects": [
+    {
+      "source": "/contact/",
+      "destination": "/connect/",
+      "permanent": true
+    }
+  ]
 }
