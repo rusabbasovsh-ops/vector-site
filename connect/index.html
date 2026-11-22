@@ -26,8 +26,8 @@
 <script>
 (() => {
   const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
-  const images = [...document.querySelectorAll('main > img.top, main > img.bottom')];
   const mobileLayout = matchMedia('(max-width: 600px)');
+  const images = [...document.querySelectorAll('main > img.top, main > img.bottom')];
   const vertexSource = `
     attribute vec2 uv;
     uniform float aspect;
@@ -57,12 +57,15 @@
   const fragmentSource = `
     precision mediump float;
     uniform sampler2D artwork;
+    uniform bool premultiplied;
     varying vec2 texCoord;
     varying float light;
 
     void main() {
       vec4 color = texture2D(artwork, texCoord);
-      gl_FragColor = vec4(color.rgb * light, color.a);
+      vec3 lit = color.rgb * light;
+      if (premultiplied) lit = min(lit, vec3(color.a));
+      gl_FragColor = vec4(lit, color.a);
     }
   `;
 
@@ -80,12 +83,16 @@
   }
   const geometry = new Float32Array(vertices);
 
-  function createSurface(image, index) {
+  function createSurface(image, index, mobile) {
     const canvas = document.createElement('canvas');
     canvas.className = image.className;
     canvas.setAttribute('aria-hidden', 'true');
-    const gl = canvas.getContext('webgl', { antialias: true, premultipliedAlpha: false });
-    if (!gl) return null;
+    // On mobile, keep WebGL off the page and composite premultiplied frames
+    // through a 2D canvas, so Safari never composites a transparent WebGL layer.
+    const renderCanvas = mobile ? document.createElement('canvas') : canvas;
+    const composite = mobile ? canvas.getContext('2d') : null;
+    const gl = renderCanvas.getContext('webgl', { antialias: !mobile, premultipliedAlpha: mobile });
+    if (!gl || (mobile && !composite)) return null;
 
     const program = gl.createProgram();
     for (const [type, source] of [[gl.VERTEX_SHADER, vertexSource], [gl.FRAGMENT_SHADER, fragmentSource]]) {
@@ -98,6 +105,7 @@
     gl.linkProgram(program);
     if (!gl.getProgramParameter(program, gl.LINK_STATUS)) return null;
     gl.useProgram(program);
+    gl.uniform1i(gl.getUniformLocation(program, 'premultiplied'), mobile ? 1 : 0);
 
     const buffer = gl.createBuffer();
     gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
@@ -108,6 +116,7 @@
 
     const texture = gl.createTexture();
     gl.bindTexture(gl.TEXTURE_2D, texture);
+    gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, mobile);
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, image);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
@@ -121,16 +130,27 @@
     gl.uniform2f(gl.getUniformLocation(program, 'axis'), ...(upper ? [.65, -.76] : [1, 0]));
     gl.uniform1f(gl.getUniformLocation(program, 'phase'), upper ? .4 : 2.1);
     const time = gl.getUniformLocation(program, 'time');
-    canvas.width = image.naturalWidth;
-    canvas.height = image.naturalHeight;
+    const pixelWidth = mobile
+      ? Math.min(1400, Math.ceil(560 * devicePixelRatio))
+      : image.naturalWidth;
+    canvas.width = pixelWidth;
+    canvas.height = Math.round(pixelWidth / aspect);
+    canvas.style.aspectRatio = String(aspect);
+    if (mobile) {
+      renderCanvas.width = canvas.width;
+      renderCanvas.height = canvas.height;
+      composite.globalCompositeOperation = 'copy';
+    }
     let failed = false;
-    canvas.addEventListener('webglcontextlost', () => {
+    renderCanvas.addEventListener('webglcontextlost', () => {
+      if (failed) return;
       failed = true;
       canvas.hidden = true;
       image.hidden = false;
     });
+    canvas.hidden = true;
     image.after(canvas);
-    return {
+    const surface = {
       show(animated) {
         canvas.hidden = !animated || failed;
         image.hidden = animated && !failed;
@@ -141,13 +161,21 @@
         gl.clear(gl.COLOR_BUFFER_BIT);
         gl.uniform1f(time, seconds * (index ? -.72 : .84));
         gl.drawArrays(gl.TRIANGLES, 0, geometry.length / 2);
+        if (composite) composite.drawImage(renderCanvas, 0, 0);
+      },
+      remove() {
+        failed = true;
+        canvas.remove();
+        gl.getExtension('WEBGL_lose_context')?.loseContext();
       }
     };
+    surface.draw(performance.now() / 1000);
+    return surface;
   }
 
   Promise.all(images.map(image => image.decode().catch(() => null))).then(() => {
     const surfaces = [];
-    const mobileRibbons = [];
+    let mobile;
     let frame = 0;
     let previous = -Infinity;
 
@@ -161,40 +189,21 @@
 
     function sync() {
       cancelAnimationFrame(frame);
-      const mobile = mobileLayout.matches;
-      const animate = !reducedMotion.matches;
-      if (mobile && animate && !mobileRibbons.length) {
-        images.forEach((image, index) => {
-          const ribbon = document.createElement('img');
-          ribbon.className = image.className;
-          ribbon.alt = '';
-          ribbon.setAttribute('aria-hidden', 'true');
-          ribbon.hidden = true;
-          ribbon.addEventListener('load', sync, { once: true });
-          ribbon.src = './ribbon-mobile-' + index + '.webp';
-          image.after(ribbon);
-          mobileRibbons.push(ribbon);
-        });
+      if (mobile !== mobileLayout.matches) {
+        mobile = mobileLayout.matches;
+        surfaces.forEach(surface => surface.remove());
+        surfaces.length = 0;
+        images.forEach(image => { image.hidden = false; });
       }
-      if (!mobile && animate && !surfaces.length) {
+      if (!reducedMotion.matches && !surfaces.length) {
         images.forEach((image, i) => {
           if (!image.naturalWidth) return;
-          const surface = createSurface(image, i);
+          const surface = createSurface(image, i, mobile);
           if (surface) surfaces.push(surface);
         });
       }
-      surfaces.forEach(surface => surface.show(!mobile && animate));
-      if (mobile) {
-        images.forEach((image, index) => {
-          const ribbon = mobileRibbons[index];
-          const show = animate && Boolean(ribbon?.complete && ribbon.naturalWidth);
-          if (ribbon) ribbon.hidden = !show;
-          image.hidden = show;
-        });
-      } else {
-        mobileRibbons.forEach(ribbon => { ribbon.hidden = true; });
-      }
-      if (!mobile && animate && surfaces.length && !document.hidden) {
+      surfaces.forEach(surface => surface.show(!reducedMotion.matches));
+      if (surfaces.length && !reducedMotion.matches && !document.hidden) {
         frame = requestAnimationFrame(render);
       }
     }
