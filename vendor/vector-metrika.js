@@ -2,9 +2,13 @@
   'use strict';
 
   const counterId = 114206470;
-  const languagesByPath = { '/': 'ru', '/uz/': 'uz', '/tg/': 'tg' };
-  const language = languagesByPath[location.pathname];
-  if (location.origin !== 'https://www.vectorecovery.uz' || !language) return;
+  const languagesByPath = { '/': 'ru', '/uz/': 'uz', '/tg/': 'tg', '/connect/': 'ru' };
+  const defaultLanguage = languagesByPath[location.pathname];
+  if (location.origin !== 'https://www.vectorecovery.uz' || !defaultLanguage) return;
+
+  const language = () => location.pathname === '/connect/'
+    ? (document.querySelector('#uz:checked') ? 'uz' : 'ru')
+    : defaultLanguage;
 
   const campaignFields = {
     utm_source: /^(?:instagram|facebook|meta|telegram|youtube|vk|yandex|google)$/,
@@ -56,7 +60,7 @@
 
   const goals = new Set(['click_phone', 'click_telegram']);
   window.vectorMetrikaGoal = (name) => {
-    if (goals.has(name)) window.ym(counterId, 'reachGoal', name, { site_language: language });
+    if (goals.has(name)) window.ym(counterId, 'reachGoal', name, { site_language: language() });
   };
 
   const tag = document.createElement('script');
